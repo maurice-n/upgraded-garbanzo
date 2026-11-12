@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MIT dining halls, side by side</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+:root{--bg:#eef1f4;--card:#fff;--ink:#16212b;--muted:#5f6c79;--line:#dbe1e7;--chip:#e3e8ee;--on:#16212b;--on-ink:#fff;
+ --display:"Fraunces",Georgia,serif;--body:"Instrument Sans","Helvetica Neue",Arial,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#10161c;--card:#19212a;--ink:#e9edf1;--muted:#93a0ad;--line:#2a343e;--chip:#25303a;--on:#e9edf1;--on-ink:#10161c;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--body)}
+.wrap{max-width:1600px;margin:0 auto;padding:22px 16px 40px}
+h1{font:600 30px/1.1 var(--display);margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 16px}
+.bar{display:flex;gap:10px 18px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.seg{display:inline-flex;gap:6px;flex-wrap:wrap}
+button,input{font:inherit}
+.seg button{border:0;background:var(--chip);color:var(--ink);padding:8px 15px;border-radius:999px;cursor:pointer;font-weight:500}
+.seg button[aria-pressed=true]{background:var(--on);color:var(--on-ink)}
+label.chk{display:inline-flex;align-items:center;gap:6px;color:var(--muted);cursor:pointer}
+input{flex:1;min-width:200px;max-width:340px;padding:9px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.scroll{overflow-x:auto;padding-bottom:8px}
+.grid{display:grid;grid-template-columns:repeat(var(--n,6),minmax(240px,1fr));gap:12px;align-items:start}
+.hall{background:var(--card);border:1px solid var(--line);border-top:5px solid var(--c);border-radius:14px;padding:14px 16px 16px}
+.hall h2{font:600 20px/1.2 var(--display);margin:0}
+.hours{color:var(--muted);font-size:13px;margin:2px 0 8px;min-height:19px}
+h3{font:600 13px/1.2 var(--body);color:var(--c);margin:14px 0 4px;text-transform:capitalize}
+ul{list-style:none;margin:0;padding:0}
+li{padding:3px 0;border-bottom:1px solid var(--line)}
+li:last-child{border-bottom:0}
+.t{font-size:11px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:0 5px;margin-left:6px;white-space:nowrap}
+.none{color:var(--muted);font-style:italic}
+footer{color:var(--muted);font-size:13px;margin-top:16px}
+@media (max-width:640px){.grid{grid-template-columns:repeat(var(--n,6),82vw)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>MIT dining halls, side by side</h1>
+  <p class="sub" id="sub">Loading…</p>
+  <div class="bar">
+    <div class="seg" id="days" role="group" aria-label="Day"></div>
+    <div class="seg" id="meals" role="group" aria-label="Meal"></div>
+    <label class="chk"><input id="mc" type="checkbox"> Show McCormick (closed)</label>
+    <input id="q" type="search" placeholder="Find a dish" aria-label="Find a dish">
+  </div>
+  <div class="scroll"><div class="grid" id="grid"></div></div>
+  <footer>Scraped daily from mit.cafebonappetit.com. Check Bon Appétit for allergens and same-day changes.</footer>
+</div>
+<script>
+const COLORS = ["#a02c3a","#1c6e78","#b06a14","#5d4aa0","#3c7a3e","#8a5a44"];
+const ORDER = ["Breakfast","Brunch","Lunch","Dinner","Late Night"];
+let data, day, meal;
+let showMc = false;   // McCormick is closed until further notice; hidden by default
+try{ showMc = localStorage.getItem('showMc') === '1'; }catch(e){}
+const $ = id => document.getElementById(id);
+
+function seg(el, values, current, label, onPick){
+  el.innerHTML = "";
+  values.forEach(v => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = label(v); b.setAttribute("aria-pressed", String(v === current));
+    b.onclick = () => onPick(v); el.appendChild(b);
+  });
+}
+function mealsFor(d){
+  const set = new Set();
+  data.days[d].forEach(h => h.meals.forEach(m => set.add(m.label)));
+  return [...set].sort((a, b) => (ORDER.indexOf(a) + 1 || 99) - (ORDER.indexOf(b) + 1 || 99));
+}
+const dayName = (d, i) => i === 0 ? "Today" : i === 1 ? "Tomorrow"
+  : new Date(d + "T12:00").toLocaleDateString([], {weekday:"long"});
+
+function render(){
+  const days = Object.keys(data.days).sort();
+  const meals = mealsFor(day);
+  if(!meals.includes(meal)) meal = meals.find(m => m === (new Date().getHours() < 15 ? "Brunch" : "Dinner")) || meals[0];
+  seg($("days"), days, day, d => dayName(d, days.indexOf(d)), d => { day = d; render(); });
+  seg($("meals"), meals, meal, m => m, m => { meal = m; render(); });
+  $("sub").textContent = new Date(day + "T12:00").toLocaleDateString([], {weekday:"long", month:"long", day:"numeric", year:"numeric"})
+    + " · updated " + new Date(data.generated).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
+  const term = $("q").value.trim().toLowerCase();
+  const grid = $("grid"); grid.innerHTML = "";
+  const halls = data.days[day].map((h, i) => ({h, i})).filter(({h}) => showMc || h.slug !== 'mccormick');
+  grid.style.setProperty('--n', halls.length);
+  halls.forEach(({h, i}) => {
+    const card = document.createElement("article");
+    card.className = "hall"; card.style.setProperty("--c", COLORS[i % COLORS.length]);
+    const m = h.meals.find(x => x.label === meal);
+    card.innerHTML = "<h2></h2><div class='hours'></div>";
+    card.querySelector("h2").textContent = h.name;
+    card.querySelector(".hours").textContent = m ? m.hours : "";
+    let shown = 0;
+    (m ? m.stations : []).forEach(s => {
+      const items = term ? s.items.filter(x => x.name.toLowerCase().includes(term)) : s.items;
+      if(!items.length) return;
+      shown++;
+      const t = document.createElement("h3"); t.textContent = s.name;
+      const ul = document.createElement("ul");
+      items.forEach(x => {
+        const li = document.createElement("li"); li.textContent = x.name;
+        x.tags.forEach(g => { const s = document.createElement("span"); s.className = "t"; s.textContent = g; li.appendChild(s); });
+        ul.appendChild(li);
+      });
+      card.append(t, ul);
+    });
+    if(!shown){
+      const p = document.createElement("p"); p.className = "none";
+      p.textContent = h.error ? "Couldn’t load this menu." : term ? "No matching dishes." : "Not serving " + meal.toLowerCase() + ".";
+      card.appendChild(p);
+    }
+    grid.appendChild(card);
+  });
+}
+$("mc").checked = showMc;
+$("mc").addEventListener("change", e => { showMc = e.target.checked; try{ localStorage.setItem("showMc", showMc ? "1" : "0"); }catch(_){} render(); });
+$("q").addEventListener("input", render);
+fetch("data.json", {cache: "no-cache"}).then(r => r.json()).then(d => {
+  data = d; day = Object.keys(d.days).sort()[0]; render();
+}).catch(() => { $("sub").textContent = "Couldn’t load data.json. If you opened this file directly, serve it over http (python3 -m http.server) or use the GitHub Pages link."; });
+</script>
+</body>
+</html>
